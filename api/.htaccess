@@ -1,0 +1,18 @@
+# Apache .htaccess configuration for SERD PHP API in XAMPP
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Allow direct access to physical files (e.g. health.php, incidents.php, schema.sql)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Route all other API requests through index.php
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Ensure JSON headers and CORS fallback
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept"
+</IfModule>
