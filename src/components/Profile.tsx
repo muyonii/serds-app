@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import TopHeader from './TopHeader';
 import { Screen } from '../types';
 import { useUserSettings, calculateProfileCompletion } from '../lib/userSettings';
-import { User as UserIcon, ChevronRight, X, PhoneCall, Shield, HeartHandshake, Copy, Check } from 'lucide-react';
+import { User as UserIcon, ChevronRight, X, PhoneCall, Shield, HeartHandshake, Copy, Check, LogOut } from 'lucide-react';
 
 interface ProfileProps {
-  onNavigate: (screen: Screen | any) => void;
+  onNavigate?: (screen: Screen | any) => void;
 }
 
 export default function Profile({ onNavigate }: ProfileProps) {
@@ -78,10 +77,7 @@ export default function Profile({ onNavigate }: ProfileProps) {
   };
 
   return (
-    <div className={`flex flex-col h-full ${darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#FAFAFA] text-gray-900'} px-6 py-8 overflow-y-auto transition-colors`}>
-      {/* Top Header */}
-      <TopHeader title="Profile" onNavigate={onNavigate} />
-
+    <div className={`flex flex-col h-full ${darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#FAFAFA] text-gray-900'} px-6 pt-5 pb-8 overflow-y-auto transition-colors`}>
       {/* Info Section */}
       <div className={`flex justify-between items-center mb-8 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-gray-50'} p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.03)] border`}>
         <div>
@@ -217,6 +213,25 @@ export default function Profile({ onNavigate }: ProfileProps) {
             {emergencyContact.phone}
           </a>
         </div>
+      </div>
+
+      {/* Account & Session Actions */}
+      <div className="mt-6 mb-8">
+        <button
+          type="button"
+          onClick={() => onNavigate?.('login')}
+          className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-2xl border text-sm font-semibold transition-all active:scale-[0.99] cursor-pointer ${
+            darkMode 
+              ? 'bg-rose-950/20 hover:bg-rose-950/40 border-rose-900/40 text-rose-300' 
+              : 'bg-white hover:bg-rose-50/70 border-rose-200/80 text-rose-600 shadow-[0_2px_10px_rgb(0,0,0,0.02)]'
+          }`}
+        >
+          <LogOut className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+          <span>Log Out</span>
+        </button>
+        <p className="text-center text-[11px] text-gray-400 dark:text-neutral-500 mt-2.5">
+          Signed in as {profile?.email || 'barry.allen@serds.local'}
+        </p>
       </div>
 
       {/* Minimalist Emergency Medical ID Sheet */}

@@ -217,8 +217,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   location: {
     servicesEnabled: true,
     highAccuracy: true,
-    lastKnownCoords: { lat: 14.6760, lng: 120.5375 },
-    lastKnownAddress: 'Balanga Plaza Mayor, Bataan'
+    lastKnownCoords: null,
+    lastKnownAddress: 'Locating GPS coordinates...'
   },
   darkMode: false
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   MapPin, 
@@ -18,6 +18,7 @@ import {
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { useWebRTC } from '../contexts/WebRTCContext';
+import { calculateRealRoute, formatDistance, formatEta, RouteResult } from '../lib/routing';
 
 interface DispatcherDashboardProps {
   onBack: () => void;
@@ -120,7 +121,31 @@ export default function DispatcherDashboard({ onBack }: DispatcherDashboardProps
 
   // Center map on Balanga City, Bataan
   const center: [number, number] = [14.6760, 120.5375];
+  const unitCoords: [number, number] = [14.6720, 120.5350];
   const selectedIncident = incidents.find(i => i.id === selectedIncidentId) || incidents[0];
+
+  // Dynamic Dijkstra road route calculation
+  const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsRouting(true);
+
+    calculateRealRoute(unitCoords, selectedIncident.coords)
+      .then((res) => {
+        if (!isMounted) return;
+        setActiveRoute(res);
+        setIsRouting(false);
+      })
+      .catch(() => {
+        if (isMounted) setIsRouting(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedIncident.id, selectedIncident.coords[0], selectedIncident.coords[1]]);
 
   const handleDispatch = (id: string) => {
     setIncidents(prev => prev.map(inc => 
@@ -423,18 +448,14 @@ export default function DispatcherDashboard({ onBack }: DispatcherDashboardProps
               ))}
 
               {/* Responder Unit Marker */}
-              <Marker position={[14.6720, 120.5350]} icon={unitIcon} />
+              <Marker position={unitCoords} icon={unitIcon} />
 
               {/* Computed Dijkstra Route to Selected Incident */}
               <Polyline
-                positions={[
-                  [14.6720, 120.5350],
-                  [14.6750, 120.5370],
-                  selectedIncident.coords
-                ]}
-                color="#0f172a"
+                positions={activeRoute ? activeRoute.coordinates : [unitCoords, selectedIncident.coords]}
+                color="#B41A46"
                 weight={4}
-                opacity={0.8}
+                opacity={0.85}
                 dashArray="6, 6"
               />
             </MapContainer>
@@ -443,15 +464,17 @@ export default function DispatcherDashboard({ onBack }: DispatcherDashboardProps
             <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-xs border border-neutral-200 rounded-xl p-3 shadow-xs max-w-sm">
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="font-mono font-semibold text-neutral-900">{selectedIncident.id}</span>
-                <span className="font-mono text-[10px] text-neutral-500">DIJKSTRA PATH VERIFIED</span>
+                <span className="font-mono text-[10px] text-emerald-700 font-medium">
+                  {isRouting ? 'CALCULATING PATH...' : 'DIJKSTRA PATH VERIFIED'}
+                </span>
               </div>
               <p className="text-xs font-medium text-neutral-700 truncate">{selectedIncident.location}</p>
               <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center space-x-3 text-[11px] font-mono text-neutral-500">
-                <span>SEGMENTS: 4</span>
+                <span>WAYPOINTS: {activeRoute ? activeRoute.coordinates.length : 4}</span>
                 <span>•</span>
-                <span>COST: 1.18 KM</span>
+                <span>DIST: {activeRoute ? formatDistance(activeRoute.distanceMeters) : `${selectedIncident.distanceKm} KM`}</span>
                 <span>•</span>
-                <span className="text-emerald-600 font-medium">TRAFFIC: LOW</span>
+                <span>ETA: {activeRoute ? formatEta(activeRoute.durationSeconds) : `${selectedIncident.etaMins} MINS`}</span>
               </div>
             </div>
 

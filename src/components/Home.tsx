@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Phone, Menu } from 'lucide-react';
+import { Phone } from 'lucide-react';
 import { Screen } from '../types';
 import { useUserSettings } from '../lib/userSettings';
 import { createEmergencyIncident } from '../lib/api';
 
 interface HomeProps {
-  onSOSClick: () => void;
+  onSOSClick: (autoDispatch?: boolean) => void;
   onChatClick: (message?: string) => void;
   onNavigate: (screen: Screen | any) => void;
 }
@@ -64,7 +64,7 @@ export default function Home({ onSOSClick, onChatClick, onNavigate }: HomeProps)
           coords: location.lastKnownCoords ? [location.lastKnownCoords.lat, location.lastKnownCoords.lng] : [14.6780, 120.5390]
         });
 
-        onSOSClick();
+        onSOSClick(true);
       } else {
         progressAnimRef.current = requestAnimationFrame(animateProgress);
       }
@@ -82,22 +82,9 @@ export default function Home({ onSOSClick, onChatClick, onNavigate }: HomeProps)
   const ringOffset = RING_CIRCUMFERENCE - (holdProgress / 100) * RING_CIRCUMFERENCE;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA] text-gray-900 px-6 pt-7 pb-4 font-sans select-none overflow-hidden">
-      {/* Top Bar Header Matching Paper Page 22 */}
-      <div className="flex items-center justify-between mb-3">
-        <button 
-          onClick={() => onNavigate('profile')}
-          className="text-gray-800 p-1 -ml-1 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="Navigation Menu"
-        >
-          <Menu className="w-6 h-6" strokeWidth={2.2} />
-        </button>
-        <span className="text-sm font-semibold text-gray-800">Home</span>
-        <div className="w-6" />
-      </div>
-
+    <div className="flex flex-col h-full bg-[#FAFAFA] text-gray-900 px-6 pt-5 pb-4 font-sans select-none overflow-hidden">
       {/* Sub-header User & Location Context (Page 22) */}
-      <div className="flex justify-between items-start pt-1 pb-6 text-xs">
+      <div className="flex justify-between items-start pt-1 pb-5 text-xs">
         <div>
           <p className="font-semibold text-gray-900 text-sm leading-tight">
             Hello, {profile.displayName || 'Barry'}

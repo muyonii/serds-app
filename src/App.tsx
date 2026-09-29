@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import SignUp from './components/SignUp';
 import MainLayout from './components/MainLayout';
@@ -16,24 +16,41 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [initialChatMessage, setInitialChatMessage] = useState<string>('');
+  const [mapAutoDispatch, setMapAutoDispatch] = useState<boolean>(false);
+
+  // Early pre-cache real device GPS location so the map screen opens instantly without placeholder coordinates
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = [pos.coords.latitude, pos.coords.longitude];
+          try {
+            sessionStorage.setItem('serd_real_user_location', JSON.stringify(coords));
+            localStorage.setItem('serd_real_user_location', JSON.stringify(coords));
+          } catch {}
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
 
   const handleNavigate = (screen: Screen | any) => {
     if (screen === 'home' || screen === 'contacts' || screen === 'profile') {
       setCurrentScreen('main');
       setActiveTab(screen);
-    } else if (screen === 'mapTab') {
-      setCurrentScreen('map');
+    } else if (screen === 'map' || screen === 'mapTab') {
+      setMapAutoDispatch(false);
+      setCurrentScreen('main');
+      setActiveTab('mapTab');
     } else {
       setCurrentScreen(screen);
     }
   };
 
   const handleTabChange = (tab: Tab) => {
-    if (tab === 'mapTab') {
-      setCurrentScreen('map');
-    } else {
-      setActiveTab(tab);
-    }
+    setActiveTab(tab);
+    setCurrentScreen('main');
   };
 
   const isDesktop = currentScreen === 'dispatcher' || currentScreen === 'admin';
@@ -54,7 +71,10 @@ export default function App() {
             <MainLayout activeTab={activeTab} onTabChange={handleTabChange}>
               {activeTab === 'home' && (
                 <Home 
-                  onSOSClick={() => setCurrentScreen('map')} 
+                  onSOSClick={(auto) => {
+                    setMapAutoDispatch(!!auto);
+                    setActiveTab('mapTab');
+                  }} 
                   onChatClick={(msg?: string) => {
                     if (msg) setInitialChatMessage(msg);
                     else setInitialChatMessage('');
@@ -63,12 +83,33 @@ export default function App() {
                   onNavigate={handleNavigate}
                 />
               )}
+              {activeTab === 'mapTab' && (
+                <MapScreen 
+                  autoDispatch={mapAutoDispatch}
+                  onBack={() => {
+                    setMapAutoDispatch(false);
+                    setActiveTab('home');
+                  }} 
+                />
+              )}
               {activeTab === 'contacts' && <Contacts onNavigate={handleNavigate} />}
               {activeTab === 'profile' && <Profile onNavigate={handleNavigate} />}
             </MainLayout>
           )}
 
-          {currentScreen === 'map' && <MapScreen onBack={() => setCurrentScreen('main')} />}
+          {currentScreen === 'map' && (
+            <MainLayout activeTab="mapTab" onTabChange={handleTabChange}>
+              <MapScreen 
+                autoDispatch={mapAutoDispatch}
+                onBack={() => {
+                  setMapAutoDispatch(false);
+                  setCurrentScreen('main');
+                  setActiveTab('home');
+                }} 
+              />
+            </MainLayout>
+          )}
+
           {currentScreen === 'chat' && <ChatAssistant initialMessage={initialChatMessage} onBack={() => setCurrentScreen('main')} />}
           {currentScreen === 'responder' && <ResponderView onBack={() => setCurrentScreen('login')} />}
         </div>

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { User, Plus, X, CheckCircle2, Send, PhoneCall, ShieldCheck, Clock } from 'lucide-react';
-import TopHeader from './TopHeader';
 import { Screen } from '../types';
 import { useUserSettings } from '../lib/userSettings';
 import { broadcastSafetyCheckIn } from '../lib/api';
@@ -13,7 +12,7 @@ interface ContactItem {
 }
 
 interface ContactsProps {
-  onNavigate: (screen: Screen) => void;
+  onNavigate?: (screen: Screen) => void;
 }
 
 export default function Contacts({ onNavigate }: ContactsProps) {
@@ -72,24 +71,7 @@ export default function Contacts({ onNavigate }: ContactsProps) {
   };
 
   return (
-    <div className={`flex flex-col h-full ${darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#FAFAFA] text-gray-900'} px-6 py-8 relative transition-colors`}>
-      {/* Top Header */}
-      <TopHeader 
-        title="Contacts" 
-        onNavigate={onNavigate}
-        rightElement={
-          <button
-            id="add-contact-btn"
-            onClick={() => setIsAddModalOpen(true)}
-            className="w-8 h-8 rounded-full bg-[#B41A46] text-white flex items-center justify-center shadow-sm hover:bg-[#9a143a] active:scale-95 transition-all"
-            title="Add Contact"
-            aria-label="Add Contact"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-        }
-      />
-
+    <div className={`flex flex-col h-full ${darkMode ? 'bg-neutral-950 text-neutral-100' : 'bg-[#FAFAFA] text-gray-900'} px-6 pt-5 pb-8 overflow-y-auto relative transition-colors`}>
       {/* "I am Safe" One-Tap Quick Broadcast Card */}
       <div className={`mb-6 p-4 rounded-2xl border transition-all ${
         broadcastState === 'sent'
@@ -166,7 +148,16 @@ export default function Contacts({ onNavigate }: ContactsProps) {
         <span className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
           Emergency Circle ({contacts.length})
         </span>
-        <span className="text-[11px] text-gray-400 dark:text-neutral-500">Instant CAD Telemetry</span>
+        <button
+          id="add-contact-btn"
+          onClick={() => setIsAddModalOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#B41A46] text-white text-xs font-semibold shadow-xs hover:bg-[#9a143a] active:scale-95 transition-all"
+          title="Add Contact"
+          aria-label="Add Contact"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Add Contact</span>
+        </button>
       </div>
 
       {/* Contact List */}
