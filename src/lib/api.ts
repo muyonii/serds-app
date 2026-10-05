@@ -1,17 +1,22 @@
 /**
  * SERD API Client
- * Interfaces with Node.js Express CAD backend.
+ * Interfaces with Node.js Express CAD backend and Firebase Firestore.
  */
+
+import { 
+  saveIncidentToFirestore, 
+  updateFirestoreIncidentStatus, 
+  saveSafetyBroadcastToFirestore 
+} from './firebase';
 
 const STORAGE_API_KEY = 'serd_api_base_url';
 
 export interface BackendHealthResponse {
   status: string;
-  backend: 'express' | 'php' | 'mock';
+  backend: 'express' | 'mock';
   platform?: string;
   framework?: string;
   webserver?: string;
-  php_version?: string;
   database?: {
     status: string;
     driver?: string;
@@ -182,6 +187,20 @@ export async function createEmergencyIncident(payload: {
   details?: string;
 }): Promise<IncidentRecord | null> {
   const baseUrl = getApiBaseUrl();
+
+  // Also sync directly to Firebase Firestore
+  saveIncidentToFirestore({
+    code: '10-79',
+    type: payload.type || 'General Emergency SOS',
+    priority: (payload.priority as any) || 'critical',
+    location: payload.location || 'Balanga City Center',
+    reportedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    patientName: payload.patientName || 'Citizen Caller',
+    coords: payload.coords || [14.6780, 120.5390],
+    details: payload.details || '',
+    status: 'dispatched'
+  }).catch((e) => console.warn('[Firestore] Async save error:', e));
+
   try {
     const res = await fetch(`${baseUrl}/incidents`, {
       method: 'POST',
@@ -224,6 +243,8 @@ export async function createEmergencyIncident(payload: {
  */
 export async function updateIncidentStatus(id: string, status: string): Promise<boolean> {
   const baseUrl = getApiBaseUrl();
+  updateFirestoreIncidentStatus(id, status as any).catch(() => {});
+
   try {
     const res = await fetch(`${baseUrl}/incidents/${id}/status`, {
       method: 'PATCH',
@@ -246,6 +267,13 @@ export async function updateIncidentStatus(id: string, status: string): Promise<
  */
 export async function broadcastSafetyCheckIn(callerName?: string, contactsCount?: number): Promise<BroadcastSafeResponse['data']> {
   const baseUrl = getApiBaseUrl();
+
+  saveSafetyBroadcastToFirestore({
+    callerName: callerName || 'Barry',
+    recipientsNotified: contactsCount || 4,
+    status: 'Delivered'
+  }).catch(() => {});
+
   try {
     const res = await fetch(`${baseUrl}/contacts/broadcast-safe`, {
       method: 'POST',

@@ -33,6 +33,7 @@ export interface UserProfile {
   allergies: AllergyItem[];
   emergencyContact: EmergencyContact;
   profileCompletionPct: number;
+  avatarUrl?: string;
 }
 
 export interface PrivacySecuritySettings {
@@ -263,10 +264,27 @@ export function saveSettings(settings: AppSettings): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: settings }));
+    // Defer event dispatch to next tick to avoid synchronous setState during active React render phases
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: settings }));
+    }, 0);
   } catch (err) {
     console.error('Error saving SERD settings:', err);
   }
+}
+
+export function updateStoredProfile(profilePartial: Partial<UserProfile>): void {
+  const current = loadSettings();
+  const mergedProfile = { ...current.profile, ...profilePartial };
+  if (!Array.isArray(mergedProfile.allergies)) {
+    mergedProfile.allergies = [];
+  }
+  if (!Array.isArray(mergedProfile.chronicConditions)) {
+    mergedProfile.chronicConditions = [];
+  }
+  mergedProfile.profileCompletionPct = calculateProfileCompletion(mergedProfile);
+  const next: AppSettings = { ...current, profile: mergedProfile };
+  saveSettings(next);
 }
 
 export function applyTheme(darkMode: boolean): void {
@@ -281,10 +299,12 @@ export function applyTheme(darkMode: boolean): void {
 
 export function useUserSettings() {
   const [settings, setSettingsState] = useState<AppSettings>(() => {
-    const initial = loadSettings();
-    applyTheme(initial.darkMode);
-    return initial;
+    return loadSettings();
   });
+
+  useEffect(() => {
+    applyTheme(settings.darkMode);
+  }, [settings.darkMode]);
 
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {

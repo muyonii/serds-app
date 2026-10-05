@@ -6,12 +6,14 @@ import {
   RotateCcw,
   Phone,
   PhoneCall,
+  PhoneOff,
   MessageSquare,
   Crosshair,
   AlertTriangle,
   Shield,
   Ambulance,
-  Flame
+  Flame,
+  Lock
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -483,6 +485,9 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
   // Dispatch state: NO ROUTE initially until CALL confirmation (or autoDispatch from Home hold)
   const [isDispatched, setIsDispatched] = useState<boolean>(false);
   const [dispatchedStation, setDispatchedStation] = useState<DispatcherStation | null>(null);
+  const [hasCancelled, setHasCancelled] = useState<boolean>(false);
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState<boolean>(false);
+  const [cancelNotice, setCancelNotice] = useState<string | null>(null);
   
   // Selected emergency service category: Police, Ambulance, Fire
   const [selectedService, setSelectedService] = useState<EmergencyServiceType>('ambulance');
@@ -517,23 +522,24 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
 
   const currentResponder = dispatchedStation || activeNearest;
 
-  // Auto-updates nearest unit when citizen selects what emergency service they need
+  // Auto-updates nearest unit when citizen selects what emergency service they need (locked when call is active)
   const handleSelectService = (service: EmergencyServiceType) => {
+    if (isDispatched) {
+      setCancelNotice('Active emergency call in progress. Cancel current call first to switch services.');
+      setTimeout(() => setCancelNotice(null), 3000);
+      return;
+    }
     setSelectedService(service);
     if (!citizenLocation || stations.length === 0) return;
     const matching = stations.filter(s => s.serviceCategory === service);
     const targetStation = findNearestDispatcher(citizenLocation[0], citizenLocation[1], matching.length > 0 ? matching : stations);
-    
-    if (isDispatched) {
-      triggerDispatch(targetStation);
-    } else {
-      setDispatchedStation(targetStation);
-    }
+    setDispatchedStation(targetStation);
   };
 
   // Perform dispatch: notifies CAD backend & calculates Dijkstra road route from nearest dispatcher
   const triggerDispatch = (stationToUse?: DispatcherStation) => {
     if (!citizenLocation) return;
+    setHasCancelled(false);
     const station = stationToUse || currentResponder;
     setDispatchedStation(station);
     setIsDispatched(true);
@@ -564,10 +570,10 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
 
   // Auto-dispatch effect when passed from Home button hold countdown
   useEffect(() => {
-    if (autoDispatch && !isDispatched && citizenLocation) {
+    if (autoDispatch && !isDispatched && !hasCancelled && citizenLocation) {
       triggerDispatch();
     }
-  }, [autoDispatch, citizenLocation]);
+  }, [autoDispatch, isDispatched, hasCancelled, citizenLocation]);
 
   // Re-calculate route if citizen location changes while already dispatched
   useEffect(() => {
@@ -618,19 +624,31 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
     };
   }, [isSimulating, routePoints]);
 
-  // CALL button click handler:
-  // If NOT dispatched: open confirmation popup
-  // If ALREADY dispatched: execute direct phone / audio call
+  // CALL / CANCEL button click handler:
+  // If NOT dispatched: open confirmation popup to CALL
+  // If ALREADY dispatched: open confirmation to CANCEL dispatch
   const handleCallClick = () => {
     if (!isDispatched) {
       setShowCallConfirmModal(true);
     } else {
-      if (onCallClick) {
-        onCallClick();
-      } else {
-        window.location.href = 'tel:911';
-      }
+      setShowCancelConfirmModal(true);
     }
+  };
+
+  // Cancel emergency dispatch handler
+  const handleCancelCall = () => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    setIsSimulating(false);
+    setTransitProgress(0);
+    setRouteResult(null);
+    setRoutePoints([]);
+    setIsDispatched(false);
+    setHasCancelled(true);
+    setShowCancelConfirmModal(false);
+    setCancelNotice('Emergency dispatch cancelled. Units stood down.');
+    setTimeout(() => {
+      setCancelNotice(null);
+    }, 3500);
   };
 
   // Confirm call in popup modal
@@ -848,27 +866,27 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
           </div>
         )}
 
-        {/* Floating Bottom Card Matching Paper Page 23 */}
-        <div className="absolute bottom-4 left-4 right-4 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-[400] animate-[fade-in_0.2s_ease-out]">
+        {/* Floating Bottom Card Matching Paper Page 23 - Mobile Optimized */}
+        <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 max-w-md mx-auto bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 dark:border-neutral-800 p-3 sm:p-4 z-[400] animate-[fade-in_0.2s_ease-out]">
           {/* Responder Identity */}
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center space-x-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+          <div className="flex items-center justify-between gap-2 mb-2 sm:mb-2.5">
+            <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 ${
                 currentResponder.serviceCategory === 'police'
-                  ? 'bg-blue-50 text-blue-700'
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400'
                   : currentResponder.serviceCategory === 'fire'
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-[#F9E8EC] text-[#B41A46]'
+                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
+                  : 'bg-[#F9E8EC] text-[#B41A46] dark:bg-rose-950/50 dark:text-rose-400'
               }`}>
-                {currentResponder.serviceCategory === 'police' && <Shield className="w-4 h-4" />}
-                {currentResponder.serviceCategory === 'fire' && <Flame className="w-4 h-4" />}
-                {currentResponder.serviceCategory === 'ambulance' && <Ambulance className="w-4 h-4" />}
+                {currentResponder.serviceCategory === 'police' && <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {currentResponder.serviceCategory === 'fire' && <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {currentResponder.serviceCategory === 'ambulance' && <Ambulance className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               </div>
-              <div>
-                <h3 className="text-xs font-semibold text-gray-900">
-                  {currentResponder.name} ({currentResponder.role})
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xs font-semibold text-gray-900 dark:text-neutral-100 truncate leading-tight">
+                  {currentResponder.name} <span className="text-[11px] text-gray-500 dark:text-neutral-400 font-normal">({currentResponder.role})</span>
                 </h3>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-400 dark:text-neutral-500 truncate mt-0.5">
                   {currentResponder.unitCode} &bull; {isDispatched ? (
                     isSimulating || transitProgress > 0 
                       ? (transitProgress >= 1 ? 'Arrived on Scene' : 'In Transit') 
@@ -880,11 +898,11 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
               </div>
             </div>
 
-            {/* Minimalist estimated distance and time indicator (replacing previous 'READY' tag) */}
-            <div className="text-right">
+            {/* Minimalist estimated distance and time indicator */}
+            <div className="shrink-0 text-right">
               {isDispatched ? (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-100 text-[#B41A46] text-xs font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#B41A46] animate-pulse" />
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 text-[#B41A46] dark:text-rose-400 text-[11px] sm:text-xs font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#B41A46] dark:bg-rose-400 animate-pulse" />
                   <span>
                     {transitProgress >= 1 
                       ? 'ARRIVED' 
@@ -894,79 +912,189 @@ export default function MapScreen({ onBack: _onBack, onCallClick, autoDispatch =
                   </span>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200/80 text-gray-800 text-xs font-medium">
-                  <span className="font-bold text-gray-900">{formatDistance(standbyEstDistanceMeters)}</span>
-                  <span className="text-gray-300 font-normal">&bull;</span>
-                  <span className="text-[#B41A46] font-semibold">{standbyEtaFormatted}</span>
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-gray-50 dark:bg-neutral-800 border border-gray-200/80 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 text-[11px] sm:text-xs font-medium">
+                  <span className="font-bold text-gray-900 dark:text-white">{formatDistance(standbyEstDistanceMeters)}</span>
+                  <span className="text-gray-300 dark:text-neutral-600 font-normal">&bull;</span>
+                  <span className="text-[#B41A46] dark:text-rose-400 font-semibold">{standbyEtaFormatted}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Emergency Service Selector: Police, Ambulance, Fire (replacing Algorithm/Distance/Response row) */}
-          <div className="grid grid-cols-3 gap-2 py-1 my-2">
-            <button
-              type="button"
-              onClick={() => handleSelectService('police')}
-              className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border select-none ${
-                selectedService === 'police'
-                  ? 'bg-blue-900 text-white border-blue-900 shadow-xs ring-1 ring-blue-500/50'
-                  : 'bg-gray-50/90 text-gray-700 border-gray-200 hover:bg-blue-50/40 hover:border-blue-200'
-              }`}
-            >
-              <Shield className={`w-3.5 h-3.5 ${selectedService === 'police' ? 'text-white' : 'text-blue-600'}`} />
-              <span>Police</span>
-            </button>
+          {/* Emergency Service Selector: Police, Ambulance, Fire */}
+          <div className="py-0.5 sm:py-1 my-1 sm:my-1.5">
+            <div className="flex items-center justify-between text-[11px] mb-1 px-0.5">
+              <span className="font-semibold text-gray-600 dark:text-neutral-400 text-[10px] sm:text-[11px]">Emergency Service</span>
+              {isDispatched ? (
+                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  Locked &bull; Dispatched
+                </span>
+              ) : (
+                <span className="text-[10px] text-gray-400 dark:text-neutral-500">Tap to select</span>
+              )}
+            </div>
 
-            <button
-              type="button"
-              onClick={() => handleSelectService('ambulance')}
-              className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border select-none ${
-                selectedService === 'ambulance'
-                  ? 'bg-[#B41A46] text-white border-[#B41A46] shadow-xs ring-1 ring-rose-500/50'
-                  : 'bg-gray-50/90 text-gray-700 border-gray-200 hover:bg-rose-50/40 hover:border-rose-200'
-              }`}
-            >
-              <Ambulance className={`w-3.5 h-3.5 ${selectedService === 'ambulance' ? 'text-white' : 'text-[#B41A46]'}`} />
-              <span>Ambulance</span>
-            </button>
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                disabled={isDispatched}
+                onClick={() => handleSelectService('police')}
+                className={`py-1.5 sm:py-2 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all select-none border ${
+                  isDispatched && selectedService !== 'police'
+                    ? 'opacity-35 bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 border-gray-200 dark:border-neutral-700 cursor-not-allowed'
+                    : selectedService === 'police'
+                    ? 'bg-blue-900 text-white border-blue-900 shadow-xs ring-1 ring-blue-500/50'
+                    : 'bg-gray-50/90 dark:bg-neutral-800/80 text-gray-700 dark:text-neutral-300 border-gray-200 dark:border-neutral-700 hover:bg-blue-50/40 hover:border-blue-200 cursor-pointer'
+                }`}
+              >
+                <Shield className={`w-3.5 h-3.5 shrink-0 ${selectedService === 'police' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} />
+                <span className="truncate">Police</span>
+                {isDispatched && selectedService === 'police' && <Lock className="w-2.5 h-2.5 text-white/80 shrink-0" />}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleSelectService('fire')}
-              className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border select-none ${
-                selectedService === 'fire'
-                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs ring-1 ring-amber-400/50'
-                  : 'bg-gray-50/90 text-gray-700 border-gray-200 hover:bg-amber-50/40 hover:border-amber-200'
-              }`}
-            >
-              <Flame className={`w-3.5 h-3.5 ${selectedService === 'fire' ? 'text-white' : 'text-amber-600'}`} />
-              <span>Fire</span>
-            </button>
+              <button
+                type="button"
+                disabled={isDispatched}
+                onClick={() => handleSelectService('ambulance')}
+                className={`py-1.5 sm:py-2 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all select-none border ${
+                  isDispatched && selectedService !== 'ambulance'
+                    ? 'opacity-35 bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 border-gray-200 dark:border-neutral-700 cursor-not-allowed'
+                    : selectedService === 'ambulance'
+                    ? 'bg-[#B41A46] text-white border-[#B41A46] shadow-xs ring-1 ring-rose-500/50'
+                    : 'bg-gray-50/90 dark:bg-neutral-800/80 text-gray-700 dark:text-neutral-300 border-gray-200 dark:border-neutral-700 hover:bg-rose-50/40 hover:border-rose-200 cursor-pointer'
+                }`}
+              >
+                <Ambulance className={`w-3.5 h-3.5 shrink-0 ${selectedService === 'ambulance' ? 'text-white' : 'text-[#B41A46] dark:text-rose-400'}`} />
+                <span className="truncate">EMS</span>
+                {isDispatched && selectedService === 'ambulance' && <Lock className="w-2.5 h-2.5 text-white/80 shrink-0" />}
+              </button>
+
+              <button
+                type="button"
+                disabled={isDispatched}
+                onClick={() => handleSelectService('fire')}
+                className={`py-1.5 sm:py-2 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all select-none border ${
+                  isDispatched && selectedService !== 'fire'
+                    ? 'opacity-35 bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 border-gray-200 dark:border-neutral-700 cursor-not-allowed'
+                    : selectedService === 'fire'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs ring-1 ring-amber-400/50'
+                    : 'bg-gray-50/90 dark:bg-neutral-800/80 text-gray-700 dark:text-neutral-300 border-gray-200 dark:border-neutral-700 hover:bg-amber-50/40 hover:border-amber-200 cursor-pointer'
+                }`}
+              >
+                <Flame className={`w-3.5 h-3.5 shrink-0 ${selectedService === 'fire' ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`} />
+                <span className="truncate">Fire</span>
+                {isDispatched && selectedService === 'fire' && <Lock className="w-2.5 h-2.5 text-white/80 shrink-0" />}
+              </button>
+            </div>
           </div>
 
-          {/* Dual Action Buttons Matching Paper Page 23: CALL and MESSAGE */}
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <button 
-              type="button"
-              onClick={handleCallClick}
-              className="py-2.5 bg-[#B41A46] text-white rounded-xl font-semibold text-xs tracking-wider uppercase hover:bg-[#9a143a] active:scale-[0.99] transition-all text-center flex items-center justify-center gap-1.5"
-            >
-              <Phone className="w-3.5 h-3.5 fill-current" />
-              <span>CALL</span>
-            </button>
+          {/* Dual Action Buttons: CALL or CANCEL and MESSAGE */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-2.5">
+            {isDispatched ? (
+              <button 
+                type="button"
+                onClick={handleCallClick}
+                className="py-2.5 sm:py-3 bg-rose-600 text-white rounded-xl font-semibold text-xs tracking-wider uppercase hover:bg-rose-700 active:scale-[0.99] transition-all text-center flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <PhoneOff className="w-3.5 h-3.5 shrink-0" />
+                <span>CANCEL</span>
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={handleCallClick}
+                className="py-2.5 sm:py-3 bg-[#B41A46] text-white rounded-xl font-semibold text-xs tracking-wider uppercase hover:bg-[#9a143a] active:scale-[0.99] transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Phone className="w-3.5 h-3.5 fill-current shrink-0" />
+                <span>CALL</span>
+              </button>
+            )}
 
             <button 
               type="button"
               onClick={() => setShowMessageModal(true)}
-              className="py-2.5 bg-white border border-[#B41A46] text-[#B41A46] rounded-xl font-semibold text-xs tracking-wider uppercase hover:bg-rose-50 active:scale-[0.99] transition-all text-center flex items-center justify-center gap-1.5"
+              className="py-2.5 sm:py-3 bg-white dark:bg-neutral-900 border border-[#B41A46] text-[#B41A46] dark:text-rose-400 rounded-xl font-semibold text-xs tracking-wider uppercase hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-[0.99] transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <MessageSquare className="w-3.5 h-3.5" />
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
               <span>MESSAGE</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Floating Notification Banner on Cancellation */}
+      {cancelNotice && (
+        <div className="absolute top-4 left-4 right-4 z-[650] bg-neutral-900/95 backdrop-blur-md text-white text-xs px-4 py-3 rounded-2xl shadow-xl border border-neutral-800 flex items-center justify-between animate-[fade-in_0.2s_ease-out]">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            <span className="font-medium">{cancelNotice}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setCancelNotice(null)}
+            className="text-gray-400 hover:text-white p-1 text-xs cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Cancellation Confirmation Modal when user taps CANCEL */}
+      {showCancelConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-5 z-[700] animate-[fade-in_0.15s_ease-out]">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <PhoneOff className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">
+                  Cancel Emergency Call?
+                </h3>
+                <p className="text-[11px] text-gray-500">
+                  Responders will stand down and the route will reset
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-rose-50/60 rounded-xl space-y-2 border border-rose-100 text-xs">
+              <div className="flex justify-between items-center text-gray-700">
+                <span className="text-[11px] text-gray-500 font-medium">Assigned Unit</span>
+                <span className="font-semibold text-rose-900">
+                  {currentResponder.unitCode} ({currentResponder.name})
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-gray-700">
+                <span className="text-[11px] text-gray-500 font-medium">Station</span>
+                <span className="text-gray-800">{currentResponder.stationName}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              If this request was triggered by accident or the emergency is resolved, confirm below to cancel the dispatch.
+            </p>
+
+            <div className="flex space-x-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirmModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Keep Active
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelCall}
+                className="flex-1 py-2.5 bg-rose-600 text-white text-xs font-semibold rounded-xl hover:bg-rose-700 shadow-xs active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+                <span>Yes, Cancel Call</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Popup Modal for CALL button on Emergency Place & Routing Screen */}
       {showCallConfirmModal && (

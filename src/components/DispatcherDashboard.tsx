@@ -19,6 +19,7 @@ import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import { useWebRTC } from '../contexts/WebRTCContext';
 import { calculateRealRoute, formatDistance, formatEta, RouteResult } from '../lib/routing';
+import { subscribeToIncidents, updateFirestoreIncidentStatus } from '../lib/firebase';
 
 interface DispatcherDashboardProps {
   onBack: () => void;
@@ -123,6 +124,42 @@ export default function DispatcherDashboard({ onBack }: DispatcherDashboardProps
   const center: [number, number] = [14.6760, 120.5375];
   const unitCoords: [number, number] = [14.6720, 120.5350];
   const selectedIncident = incidents.find(i => i.id === selectedIncidentId) || incidents[0];
+
+  // Subscribe to real-time emergency incidents from Firebase Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToIncidents((firestoreList) => {
+      if (firestoreList && firestoreList.length > 0) {
+        setIncidents((prev) => {
+          const map = new Map<string, IncidentItem>();
+          // Base mock incidents
+          INITIAL_INCIDENTS.forEach(inc => map.set(inc.id, inc));
+          // Overlay real live Firestore emergency incidents
+          firestoreList.forEach(item => {
+            if (item.id) {
+              map.set(item.id, {
+                id: item.id,
+                code: item.code,
+                type: item.type,
+                priority: item.priority,
+                location: item.location,
+                reportedTime: item.reportedTime,
+                patientName: item.patientName,
+                recommendedUnit: item.recommendedUnit || 'Ambulance Unit 04',
+                distanceKm: item.distanceKm || 0.48,
+                etaMins: item.etaMins || 2.0,
+                routeAlgorithm: item.routeAlgorithm || 'Dijkstra (Optimal Node Path)',
+                status: item.status === 'cancelled' ? 'pending' : (item.status as any),
+                coords: item.coords
+              });
+            }
+          });
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Dynamic Dijkstra road route calculation
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
